@@ -10,15 +10,15 @@ RUN mvn dependency:go-offline -B
 COPY src ./src
 RUN mvn clean package -DskipTests
 
-# Étape 2: Image finale légère avec seulement le JRE
-FROM eclipse-temurin:17-jre-alpine
+# Étape 2: Image finale légère avec seulement le JRE stable
+FROM eclipse-temurin:17-jre
 WORKDIR /app
 
 # Copier le JAR depuis l'étape de build
 COPY --from=build /app/target/*.jar app.jar
 
-# Exposer le port (ajustez si votre application utilise un autre port)
+# Exposer le port
 EXPOSE 8080
 
-# Point d'entrée pour lancer l'application
+# Lancer l'application
 ENTRYPOINT ["java", "-jar", "app.jar"]
