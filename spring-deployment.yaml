@@ -33,7 +33,7 @@ spec:
     spec:
       containers:
         - name: spring-app
-          image: soulaimahleli/devops:latest
+          image: soulaima13/student-managements:latest
           ports:
             - containerPort: 8089
           env:
