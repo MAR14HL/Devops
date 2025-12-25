@@ -87,8 +87,7 @@ EOF
                 }
             }
         }
-
-        stage('Deploy to Kubernetes') {
+   stage('Deploy to Kubernetes') {
             steps {
                 withCredentials([string(credentialsId: 'kubeconfig-minikube', variable: 'KUBECONFIG_BASE64')]) {
                     script {
@@ -96,8 +95,8 @@ EOF
                             # Créer un fichier temporaire sécurisé
                             KUBECONFIG_FILE=$(mktemp)
                             
-                            # Décoder le kubeconfig (essayer avec et sans base64)
-                            echo "$KUBECONFIG_BASE64" | base64 -d > $KUBECONFIG_FILE 2>/dev/null || echo "$KUBECONFIG_BASE64" > $KUBECONFIG_FILE
+                            # Décoder le kubeconfig
+                            echo "$KUBECONFIG_BASE64" | base64 -d > $KUBECONFIG_FILE
                             
                             export KUBECONFIG=$KUBECONFIG_FILE
                             
@@ -149,7 +148,7 @@ EOF
                     script {
                         sh '''
                             KUBECONFIG_FILE=$(mktemp)
-                            echo "$KUBECONFIG_BASE64" | base64 -d > $KUBECONFIG_FILE 2>/dev/null || echo "$KUBECONFIG_BASE64" > $KUBECONFIG_FILE
+                            echo "$KUBECONFIG_BASE64" | base64 -d > $KUBECONFIG_FILE
                             export KUBECONFIG=$KUBECONFIG_FILE
                             
                             echo "=== Ressources Kubernetes ==="
@@ -159,7 +158,7 @@ EOF
                             kubectl logs deployment/spring-app -n ${K8S_NAMESPACE} --tail=30 || echo "Pas de logs disponibles"
                             
                             echo "=== URL du service ==="
-                            minikube service spring-service -n ${K8S_NAMESPACE} --url || kubectl get svc spring-service -n ${K8S_NAMESPACE}
+                            kubectl get svc spring-service -n ${K8S_NAMESPACE} -o jsonpath='{.spec.ports[0].nodePort}' || echo "Service non trouvé"
                             
                             rm -f $KUBECONFIG_FILE
                         '''
@@ -173,6 +172,7 @@ EOF
         success {
             echo "🚀 Déploiement réussi !"
             echo "Image déployée:  ${IMAGE_NAME}:${IMAGE_TAG}"
+            echo "Pour accéder à l'application: minikube service spring-service -n ${K8S_NAMESPACE}"
         }
         failure {
             echo "❌ Pipeline échoué"
@@ -180,13 +180,21 @@ EOF
                 sh '''
                     echo "=== Debug Info ==="
                     docker images | grep student-management || true
+                    
+                    KUBECONFIG_FILE=$(mktemp)
+                    echo "$KUBECONFIG_BASE64" | base64 -d > $KUBECONFIG_FILE 2>/dev/null || true
+                    export KUBECONFIG=$KUBECONFIG_FILE
+                    
                     kubectl get all -n devops 2>/dev/null || echo "Kubernetes non accessible"
+                    kubectl get events -n devops --sort-by='. lastTimestamp' | tail -20 || true
+                    
+                    rm -f $KUBECONFIG_FILE
                 '''
             }
         }
         always {
             echo "Pipeline terminé - Build #${BUILD_NUMBER}"
-            cleanWs(deleteDirs: true, patterns: [[pattern: '/tmp/kubeconfig*', type:  'INCLUDE']])
+            sh 'rm -f /tmp/tmp. * 2>/dev/null || true'
         }
     }
 }
