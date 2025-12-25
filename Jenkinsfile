@@ -29,10 +29,10 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                     sh """
-                        ${MAVEN_HOME}/bin/mvn sonar: sonar \
-                        -Dsonar.projectKey=${APP_NAME} \
-                        -Dsonar.host. url=http://localhost:9000 \
-                        -Dsonar.login=${SONAR_TOKEN}
+                        ${MAVEN_HOME}/bin/mvn -B sonar:sonar \
+                            -Dsonar.projectKey=${APP_NAME} \
+                            -Dsonar.host.url=http://localhost:9000 \
+                            -Dsonar.login=${SONAR_TOKEN}
                     """
                 }
             }
