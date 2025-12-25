@@ -25,15 +25,16 @@ pipeline {
             }
         }
 
+
         stage('SonarQube Analysis') {
             steps {
                 withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
-                    sh '''
-                        mvn -B sonar:sonar \
-                            -Dsonar. projectKey=${APP_NAME} \
+                    sh """
+                        ${MAVEN_HOME}/bin/mvn -B sonar:sonar \
+                            -Dsonar.projectKey=${APP_NAME} \
                             -Dsonar.host.url=http://localhost:9000 \
-                            -Dsonar.token=${SONAR_TOKEN}
-                    '''
+                            -Dsonar.login=${SONAR_TOKEN}
+                    """
                 }
             }
         }
