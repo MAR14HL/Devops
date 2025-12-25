@@ -88,7 +88,7 @@ EOF
             script {
                 // Créer un fichier temporaire kubeconfig
                 sh '''
-                    echo "$KUBECONFIG_TEXT" > /tmp/kubeconfig
+        echo "$KUBECONFIG_BASE64" | base64 -d > /tmp/kubeconfig
                     export KUBECONFIG=/tmp/kubeconfig
 
                     echo "Vérification des nodes"
