@@ -14,7 +14,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/MAR14HL/Devops.git',
+                    url: 'https://github.com/MAR14HL/Devops. git',
                     credentialsId: 'github-token'
             }
         }
@@ -30,7 +30,7 @@ pipeline {
                 withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                     sh """
                         ${MAVEN_HOME}/bin/mvn sonar:sonar \
-                        -Dsonar.projectKey=${APP_NAME} \
+                        -Dsonar. projectKey=${APP_NAME} \
                         -Dsonar.host.url=http://localhost:9000 \
                         -Dsonar.login=${SONAR_TOKEN}
                     """
@@ -60,7 +60,7 @@ EOF
                     }
 
                     sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
-                    sh "docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest"
+                    sh "docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}: latest"
                 }
             }
         }
@@ -70,10 +70,10 @@ EOF
                 withCredentials([usernamePassword(
                     credentialsId: 'dockerhub-creds',
                     usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
+                    passwordVariable:  'DOCKER_PASS'
                 )]) {
                     sh """
-                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        echo "\$DOCKER_PASS" | docker login -u "\$DOCKER_USER" --password-stdin
                         docker push ${IMAGE_NAME}:${IMAGE_TAG}
                         docker push ${IMAGE_NAME}:latest
                     """
@@ -81,49 +81,63 @@ EOF
             }
         }
 
-        // ===================== KUBERNETES =====================
- stage('Deploy to Kubernetes') {
-    steps {
-        withCredentials([string(credentialsId: 'kubeconfig-minikube', variable: 'KUBECONFIG_TEXT')]) {
-            script {
-                // Créer un fichier temporaire kubeconfig
-                sh '''
-        echo "$KUBECONFIG_BASE64" | base64 -d > /tmp/kubeconfig
-                    export KUBECONFIG=/tmp/kubeconfig
-
-                    echo "Vérification des nodes"
-                    kubectl get nodes
-
-                    echo "Création namespace devops si nécessaire"
-                    kubectl get namespace devops || kubectl create namespace devops
-
-                    echo "Déploiement MySQL"
-                    kubectl apply -f mysql-deployment.yaml -n devops --validate=false
-
-                    echo "Attente MySQL Running..."
-                    timeout 300 bash -c 'until kubectl get pod -l app=mysql -n devops -o jsonpath="{.items[0].status.phase}" | grep -q Running; do echo "Waiting MySQL..."; sleep 5; done'
-
-                    echo "Déploiement Spring App"
-                    kubectl apply -f spring-deployment.yaml -n devops --validate=false
-                    kubectl rollout status deployment/spring-app -n devops --timeout=300s
-
-                    echo "Vérification finale"
-                    kubectl get all -n devops
-                '''
+        stage('Deploy to Kubernetes') {
+            steps {
+                script {
+                    // Utilise le plugin Kubernetes CLI si installé
+                    // Sinon, utilise withCredentials
+                    try {
+                        withKubeConfig([credentialsId: 'kubeconfig-minikube']) {
+                            sh '''
+                                kubectl get nodes
+                                kubectl get namespace devops || kubectl create namespace devops
+                                kubectl apply -f mysql-deployment.yaml -n devops
+                                kubectl wait --for=condition=ready pod -l app=mysql -n devops --timeout=300s
+                                kubectl apply -f spring-deployment.yaml -n devops
+                                kubectl set image deployment/spring-app spring-app=${IMAGE_NAME}:${IMAGE_TAG} -n devops
+                                kubectl rollout status deployment/spring-app -n devops --timeout=300s
+                                kubectl get all -n devops
+                            '''
+                        }
+                    } catch (Exception e) {
+                        echo "Plugin Kubernetes CLI non disponible, utilisation de la méthode alternative"
+                        withCredentials([file(credentialsId: 'kubeconfig-minikube', variable: 'KUBECONFIG')]) {
+                            sh '''
+                                kubectl get nodes
+                                kubectl get namespace devops || kubectl create namespace devops
+                                kubectl apply -f mysql-deployment.yaml -n devops
+                                kubectl wait --for=condition=ready pod -l app=mysql -n devops --timeout=300s
+                                kubectl apply -f spring-deployment.yaml -n devops
+                                kubectl set image deployment/spring-app spring-app=${IMAGE_NAME}:${IMAGE_TAG} -n devops
+                                kubectl rollout status deployment/spring-app -n devops --timeout=300s
+                                kubectl get all -n devops
+                            '''
+                        }
+                    }
+                }
             }
         }
-    }
-    }
-
 
         stage('Verification') {
             steps {
                 script {
-                    sh """
-                        kubectl get all -n ${K8S_NAMESPACE}
-                        kubectl logs deployment/spring-app -n ${K8S_NAMESPACE} --tail=30
-                        minikube service spring-service -n ${K8S_NAMESPACE} --url || true
-                    """
+                    try {
+                        withKubeConfig([credentialsId: 'kubeconfig-minikube']) {
+                            sh '''
+                                kubectl get all -n ${K8S_NAMESPACE}
+                                kubectl logs deployment/spring-app -n ${K8S_NAMESPACE} --tail=30
+                                minikube service spring-service -n ${K8S_NAMESPACE} --url || kubectl get svc -n ${K8S_NAMESPACE}
+                            '''
+                        }
+                    } catch (Exception e) {
+                        withCredentials([file(credentialsId: 'kubeconfig-minikube', variable: 'KUBECONFIG')]) {
+                            sh '''
+                                kubectl get all -n ${K8S_NAMESPACE}
+                                kubectl logs deployment/spring-app -n ${K8S_NAMESPACE} --tail=30
+                                minikube service spring-service -n ${K8S_NAMESPACE} --url || kubectl get svc -n ${K8S_NAMESPACE}
+                            '''
+                        }
+                    }
                 }
             }
         }
@@ -132,9 +146,13 @@ EOF
     post {
         success {
             echo "🚀 Déploiement réussi !"
+            echo "Image:  ${IMAGE_NAME}:${IMAGE_TAG}"
         }
         failure {
             echo "❌ Pipeline échoué"
+        }
+        always {
+            cleanWs(deleteDirs: true)
         }
     }
 }
