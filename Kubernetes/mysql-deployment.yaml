@@ -1,14 +1,12 @@
 apiVersion: v1
-kind: PersistentVolume
+kind: Secret
 metadata:
-  name: mysql-pv
-spec:
-  capacity:
-    storage: 1Gi
-  accessModes:
-    - ReadWriteOnce
-  hostPath:
-    path: /data/mysql
+  name: mysql-secret
+  namespace: devops
+type:  Opaque
+data:
+  password: cm9vdDEyMw==  # "root123" en base64
+
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -21,13 +19,17 @@ spec:
   resources:
     requests:
       storage: 1Gi
+  # Pour minikube, pas besoin de storageClassName spécifique
+  # storageClassName: standard
+
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mysql
   namespace: devops
-spec:
+spec: 
+  replicas: 1
   selector:
     matchLabels:
       app: mysql
@@ -36,33 +38,43 @@ spec:
       labels:
         app: mysql
     spec:
-      containers:
-        - name: mysql
-          image: mysql:8.0
-          env:
-            - name: MYSQL_ROOT_PASSWORD
-              value: "root"
-            - name: MYSQL_DATABASE
-              value: "mydb"
-          ports:
-            - containerPort: 3306
-          volumeMounts:
-            - name: mysql-storage
-              mountPath: /var/lib/mysql
-      volumes:
+      containers: 
+      - name: mysql
+        image: mysql:8.0
+        env:
+        - name:  MYSQL_ROOT_PASSWORD
+          value: root123
+        - name:  MYSQL_DATABASE
+          value:  studentdb
+        ports:
+        - containerPort: 3306
+          name: mysql
+        volumeMounts:
         - name: mysql-storage
-          persistentVolumeClaim:
-            claimName: mysql-pvc
+          mountPath: /var/lib/mysql
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: mysql-storage
+        persistentVolumeClaim:
+          claimName: mysql-pvc
+
 ---
 apiVersion: v1
 kind: Service
-metadata:
+metadata: 
   name: mysql-service
   namespace: devops
-spec:
-  type: ClusterIP
+spec: 
   selector:
     app: mysql
   ports:
-    - port: 3306
-      targetPort: 3306
+  - port: 3306
+    targetPort: 3306
+    protocol: TCP
+  type: ClusterIP
