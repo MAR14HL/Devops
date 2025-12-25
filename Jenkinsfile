@@ -111,28 +111,45 @@ EOF
                             echo "=== Création namespace devops ==="
                             kubectl get namespace devops || kubectl create namespace devops
                             
-                            echo "=== Déploiement MySQL ==="
+                            echo "=== Déploiement MySQL (Secret + PVC + Deployment + Service) ==="
                             kubectl apply -f mysql-deployment.yaml -n devops
                             
-                            echo "=== Attente MySQL Ready ==="
+                            echo "=== Vérification des ressources créées ==="
+                            kubectl get secret mysql-secret -n devops || echo "⚠️  Secret non créé"
+                            kubectl get pvc mysql-pvc -n devops || echo "⚠️  PVC non créé"
+                            kubectl get deployment mysql -n devops || echo "⚠️  Deployment non créé"
+                            kubectl get svc mysql-service -n devops || echo "⚠️  Service non créé"
+                            
+                            echo "=== Attente PVC Bound ==="
+                            kubectl wait --for=jsonpath='{.status.phase}'=Bound pvc/mysql-pvc -n devops --timeout=60s || {
+                                echo "⚠️  PVC pas encore Bound"
+                                kubectl describe pvc mysql-pvc -n devops
+                            }
+                            
+                            echo "=== Attente MySQL Ready (max 5min) ==="
                             kubectl wait --for=condition=ready pod -l app=mysql -n devops --timeout=300s || {
-                                echo "MySQL pods status:"
+                                echo "❌ MySQL n'est pas prêt"
                                 kubectl get pods -l app=mysql -n devops
                                 kubectl describe pods -l app=mysql -n devops
+                                kubectl get pvc -n devops
+                                kubectl get events -n devops --sort-by='. lastTimestamp' | tail -20
                                 exit 1
                             }
+                            
+                            echo "✅ MySQL est prêt !"
                             
                             echo "=== Déploiement Spring App ==="
                             kubectl apply -f spring-deployment.yaml -n devops
                             
-                            echo "=== Mise à jour de l'image ==="
+                            echo "=== Mise à jour de l'image Spring App ==="
                             kubectl set image deployment/spring-app spring-app=${IMAGE_NAME}:${IMAGE_TAG} -n devops
                             
-                            echo "=== Attente déploiement ==="
+                            echo "=== Attente déploiement Spring App ==="
                             kubectl rollout status deployment/spring-app -n devops --timeout=300s
                             
                             echo "=== Vérification finale ==="
                             kubectl get all -n devops
+                            kubectl get pvc -n devops
                             
                             # Nettoyage
                             rm -f $KUBECONFIG_FILE
@@ -158,7 +175,8 @@ EOF
                             kubectl logs deployment/spring-app -n ${K8S_NAMESPACE} --tail=30 || echo "Pas de logs disponibles"
                             
                             echo "=== URL du service ==="
-                            kubectl get svc spring-service -n ${K8S_NAMESPACE} -o jsonpath='{.spec.ports[0].nodePort}' || echo "Service non trouvé"
+                            NODE_PORT=$(kubectl get svc spring-service -n ${K8S_NAMESPACE} -o jsonpath='{.spec.ports[0].nodePort}')
+                            echo "Application accessible sur:  http://<MINIKUBE-IP>:$NODE_PORT"
                             
                             rm -f $KUBECONFIG_FILE
                         '''
