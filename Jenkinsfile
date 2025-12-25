@@ -28,12 +28,12 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
-                    sh """
-                        ${MAVEN_HOME}/bin/mvn -B sonar:sonar \
-                            -Dsonar.projectKey=${APP_NAME} \
+                    sh '''
+                        mvn -B sonar:sonar \
+                            -Dsonar. projectKey=${APP_NAME} \
                             -Dsonar.host.url=http://localhost:9000 \
-                            -Dsonar.login=${SONAR_TOKEN}
-                    """
+                            -Dsonar.token=${SONAR_TOKEN}
+                    '''
                 }
             }
         }
@@ -57,7 +57,7 @@ pipeline {
 FROM openjdk:17-jdk-slim
 WORKDIR /app
 COPY target/*.jar app.jar
-EXPOSE 8080
+EXPOSE 8089
 ENTRYPOINT ["java", "-jar", "app.jar"]
 EOF
                         fi
@@ -73,16 +73,16 @@ EOF
         stage('Docker Push') {
             steps {
                 withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-creds',
+                    credentialsId:  'dockerhub-creds',
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-                    sh """
+                    sh '''
                         echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
                         docker push ${IMAGE_NAME}:${IMAGE_TAG}
                         docker push ${IMAGE_NAME}:latest
                         docker logout
-                    """
+                    '''
                 }
             }
         }
@@ -126,7 +126,7 @@ EOF
                             kubectl apply -f spring-deployment.yaml -n devops
                             
                             echo "=== Mise à jour de l'image ==="
-                            kubectl set image deployment/spring-app spring-app=${IMAGE_NAME}: ${IMAGE_TAG} -n devops
+                            kubectl set image deployment/spring-app spring-app=${IMAGE_NAME}:${IMAGE_TAG} -n devops
                             
                             echo "=== Attente déploiement ==="
                             kubectl rollout status deployment/spring-app -n devops --timeout=300s
@@ -179,13 +179,13 @@ EOF
                 sh '''
                     echo "=== Debug Info ==="
                     docker images | grep student-management || true
-                    kubectl get all -n devops || true
+                    kubectl get all -n devops 2>/dev/null || echo "Kubernetes non accessible"
                 '''
             }
         }
         always {
             echo "Pipeline terminé - Build #${BUILD_NUMBER}"
-            cleanWs(deleteDirs: true, patterns: [[pattern: '/tmp/kubeconfig*', type: 'INCLUDE']])
+            cleanWs(deleteDirs: true, patterns: [[pattern: '/tmp/kubeconfig*', type:  'INCLUDE']])
         }
     }
 }
