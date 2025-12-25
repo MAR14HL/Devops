@@ -47,18 +47,23 @@ pipeline {
         stage('Docker Build') {
             steps {
                 script {
-                    if (! fileExists("Dockerfile")) {
-                        sh '''
-                        cat > Dockerfile << 'EOF'
+                    // Vérifier si Dockerfile existe
+                    sh 'ls -la Dockerfile || echo "Création de Dockerfile..."'
+
+                    // Créer Dockerfile si nécessaire
+                    sh '''
+                        if [ ! -f Dockerfile ]; then
+                            cat > Dockerfile << 'EOF'
 FROM openjdk:17-jdk-slim
 WORKDIR /app
-COPY target/*.jar app. jar
-EXPOSE 8089
+COPY target/*.jar app.jar
+EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]
 EOF
-                        '''
-                    }
+                        fi
+                    '''
 
+                    // Build Docker
                     sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
                     sh "docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest"
                 }
@@ -73,9 +78,10 @@ EOF
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
                     sh """
-                        echo "\$DOCKER_PASS" | docker login -u "\$DOCKER_USER" --password-stdin
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
                         docker push ${IMAGE_NAME}:${IMAGE_TAG}
-                        docker push ${IMAGE_NAME}: latest
+                        docker push ${IMAGE_NAME}:latest
+                        docker logout
                     """
                 }
             }
