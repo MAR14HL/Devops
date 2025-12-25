@@ -82,37 +82,39 @@ EOF
         }
 
         // ===================== KUBERNETES =====================
-        stage('Deploy to Kubernetes') {
-            steps {
-                script {
-                    echo "Création Namespace"
-                    sh """
-                        kubectl get namespace ${K8S_NAMESPACE} || kubectl create namespace ${K8S_NAMESPACE}
-                    """
+ stage('Deploy to Kubernetes') {
+    steps {
+        withCredentials([string(credentialsId: 'kubeconfig-minikube', variable: 'KUBECONFIG_TEXT')]) {
+            script {
+                // Créer un fichier temporaire kubeconfig
+                sh '''
+                    echo "$KUBECONFIG_TEXT" > /tmp/kubeconfig
+                    export KUBECONFIG=/tmp/kubeconfig
 
-                    echo "Mise à jour de l'image dans spring-deployment.yaml"
-                    sh """
-                        sed -i 's|image: .*|image: ${IMAGE_NAME}:${IMAGE_TAG}|' spring-deployment.yaml
-                    """
+                    echo "Vérification des nodes"
+                    kubectl get nodes
+
+                    echo "Création namespace devops si nécessaire"
+                    kubectl get namespace devops || kubectl create namespace devops
 
                     echo "Déploiement MySQL"
-                    sh """
-                        kubectl apply -f mysql-deployment.yaml -n ${K8S_NAMESPACE} --validate=false
-                    """
+                    kubectl apply -f mysql-deployment.yaml -n devops --validate=false
 
                     echo "Attente MySQL Running..."
-                    sh """
-                        timeout 300 bash -c 'until kubectl get pod -l app=mysql -n ${K8S_NAMESPACE} -o jsonpath="{.items[0].status.phase}" | grep -q Running; do echo "Waiting MySQL..."; sleep 5; done'
-                    """
+                    timeout 300 bash -c 'until kubectl get pod -l app=mysql -n devops -o jsonpath="{.items[0].status.phase}" | grep -q Running; do echo "Waiting MySQL..."; sleep 5; done'
 
                     echo "Déploiement Spring App"
-                    sh """
-                        kubectl apply -f spring-deployment.yaml -n ${K8S_NAMESPACE} --validate=false
-                        kubectl rollout status deployment/spring-app -n ${K8S_NAMESPACE} --timeout=300s
-                    """
-                }
+                    kubectl apply -f spring-deployment.yaml -n devops --validate=false
+                    kubectl rollout status deployment/spring-app -n devops --timeout=300s
+
+                    echo "Vérification finale"
+                    kubectl get all -n devops
+                '''
             }
         }
+    }
+    }
+
 
         stage('Verification') {
             steps {
