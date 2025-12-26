@@ -1,8 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: student-config
-data:
-  SPRING_DATASOURCE_URL: "jdbc:mysql://mysql-service:3306/studentdb"
-  SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
-  SERVER_PORT: "8080"
